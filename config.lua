@@ -102,7 +102,7 @@ Config.VehicleClasses = {
 --                     false, and the lot gets no map blip at all.
 --  classes  array?    Config.VehicleClasses[...] to restrict what may park here
 --
--- POLYGON bounds -- an outline of vector3 points plus a vertical thickness:
+-- POLYGON bounds -- an outline of vec3 points plus a vertical thickness:
 --      bounds = { points = { vec3(...), vec3(...), ... }, thickness = 10.0 }
 --
 -- BOX bounds -- a centre, a size and an optional heading:
@@ -114,19 +114,19 @@ Config.Lots = {
         label = 'Pillbox Parking',
         bounds = {
             points = {
-                vec3(200.0, -788.0, 30.5),
-                vec3(240.0, -788.0, 30.5),
-                vec3(240.0, -815.0, 30.5),
-                vec3(200.0, -815.0, 30.5)
+                vector3(200.0, -788.0, 30.5),
+                vector3(240.0, -788.0, 30.5),
+                vector3(240.0, -815.0, 30.5),
+                vector3(200.0, -815.0, 30.5)
             },
             thickness = 10.0
         },
         spots = {
-            vec4(222.02, -804.19, 30.26, 248.19),
-            vec4(223.93, -799.11, 30.25, 248.53),
-            vec4(226.46, -794.33, 30.24, 248.29),
-            vec4(232.33, -807.97, 30.02, 69.17),
-            vec4(206.07, -800.93, 30.36, 69.09)
+            vector4(222.02, -804.19, 30.26, 248.19),
+            vector4(223.93, -799.11, 30.25, 248.53),
+            vector4(226.46, -794.33, 30.24, 248.29),
+            vector4(232.33, -807.97, 30.02, 69.17),
+            vector4(206.07, -800.93, 30.36, 69.09)
         },
         blip = {
             label = 'Public Parking',
@@ -155,6 +155,68 @@ Config.Lots = {
             scale = 0.7
         },
         classes = Config.VehicleClasses['car']
-    }
+    },
 
+    red_garage_floor1 = {
+        label = 'Red Garage Floor 1',
+       bounds = {
+            points = {
+               vector3(-289.5, -783.01, 33.96),
+               vector3(-284.36, -774.17, 33.96),
+               vector3(-275.47, -777.39, 33.96),
+               vector3(-266.6, -753.56, 33.96),
+               vector3(-310.35, -737.25, 33.96),
+               vector3(-312.7, -742.17, 33.96),
+               vector3(-359.54, -727.66, 33.97),
+               vector3(-362.31, -792.56, 33.97),
+               vector3(-336.07, -786.49, 33.96),
+               vector3(-319.15, -771.82, 33.96),
+               vector3(-290.23, -782.81, 33.96),
+            },
+            thickness = 10.0
+        },
+        spots = {
+            vector4(-307.4, -772.86, 33.54, 341.1),
+            vector4(-310.02, -772.02, 33.54, 339.74),
+        },
+        blip = {
+            label = 'Public Parking',
+            sprite = 357,
+            colour = 3,
+            scale = 0.7
+        },
+        classes = Config.VehicleClasses['car']
+    },
+
+    white_garage_floor1 = {
+        label = 'White Garage Floor 1',
+        bounds = {
+             points = {
+                vector3(-480.31, -819.22, 30.42),
+                vector3(-441.16, -820.21, 30.81),
+                vector3(-441.0, -796.3, 30.73),
+                vector3(-450.24, -796.05, 30.54),
+                vector3(-450.24, -796.05, 30.54),
+                vector3(-443.18, -781.56, 30.6),
+                vector3(-443.65, -753.36, 30.56),
+                vector3(-469.63, -753.42, 30.56),
+                vector3(-469.99, -733.5, 30.56),
+                vector3(-480.39, -733.23, 30.56),
+                vector3(-480.33, -791.75, 30.6),
+                vector3(-480.38, -816.45, 30.67),
+             },
+             thickness = 10.0
+        },
+        spots = {
+            vector4(-476.95, -809.94, 29.9, 270.36),
+            vector4(-477.31, -806.77, 29.9, 268.83)
+        },
+        blip = {
+            label = 'Public Parking',
+            sprite = 357,
+            colour = 3,
+            scale = 0.7
+        },
+        classes = Config.VehicleClasses['car']
+    }
 }
