@@ -55,7 +55,8 @@ Config.PollInterval = 300
 Config.ParkDuration = 1500
 
 -- Put the player straight into the driver's seat of a retrieved vehicle.
-Config.WarpIntoVehicle = true
+-- Off: the car is handed over parked in its spot and you walk to it.
+Config.WarpIntoVehicle = false
 
 -- On resource start, mark every vehicle whose garage is a jgrp lot as stored again.
 -- Off by default: it rewrites rows other garage scripts may also own.
