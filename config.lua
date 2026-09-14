@@ -236,5 +236,31 @@ Config.Lots = {
             scale = 0.7
         },
         classes = Config.VehicleClasses['car']
-    }
+    },
+
+    spanish_garage = {
+            label = 'Spanish Garage',
+            bounds = {
+                 points = {
+                    vector3(51.59, 18.47, 69.66),
+                    vector3(66.26, 13.05, 69.03),
+                    vector3(69.5, 25.77, 69.52),
+                    vector3(57.07, 29.59, 70.1),
+                 },
+                 thickness = 10.0
+            },
+            spots = {
+                vector4(54.61, 19.94, 68.95, 336.49),
+                vector4(57.73, 18.79, 68.72, 339.78),
+                vector4(60.96, 17.74, 68.6, 341.24),
+                vector4(64.0, 17.01, 68.56, 337.48),
+            },
+            blip = {
+                label = 'Public Parking',
+                sprite = 357,
+                colour = 3,
+                scale = 0.7
+            },
+            classes = Config.VehicleClasses['car']
+        }
 }
