@@ -79,9 +79,10 @@ It also prints a summary of every loaded lot to the console on start, including
 whether each one has a blip:
 
 ```
-[jgrp-garage] debug on, 2 lot(s) loaded
-  pillbox  "Pillbox Parking"  5 spots  4 bounds points  z 25.5..35.5  blip: yes
-  motel    "Motel Parking"    1 spots  4 bounds points  z 39.7..49.7  blip: yes
+[jgrp-garage] debug on, 14 lot(s) loaded
+  pillbox         "Pillbox Parking"     5 spots  4 bounds points  z 25.5..35.5  blip: yes
+  route_68_motel  "Route 68 Motel"      1 spots  4 bounds points  z 39.7..49.7  blip: yes
+  ...
 ```
 
 ox_lib's own zone debug is deliberately not used — it fills the whole volume with
@@ -100,8 +101,12 @@ With `Config.Debug = true`, four commands are available:
 
 ## Notes
 
-- Ships with two lots using coordinates taken from the server's existing
-  `qb-garages` config, so they are known-good: Pillbox (5 spots) and Motel (1 spot).
+- Ships with **14 lots** using coordinates taken from the server's existing
+  `qb-garages` config, so they are known-good: `pillbox`, `pillbox_garage`,
+  `pink_cage_parking`, `rockford_garage`, `red_garage_floor1`,
+  `white_garage_floor1`, `spanish_garage`, `casino_garage`, `beach_garage`,
+  `clinton_garage`, `mirror_park_garage`, `occupation_garage`,
+  `route_68_motel` and `great_ocean_parking`.
 - Runs alongside `qb-garages` — it only touches rows whose `garage` is one of its own
   lot ids. Note that `qb-garages` has `Config.SharedGarages = true`, so its menus list
   vehicles by `citizenid` regardless of garage and will also show cars parked here.
@@ -109,4 +114,4 @@ With `Config.Debug = true`, four commands are available:
   every vehicle in a jgrp lot as stored again on restart.
 - The only places it touches other resources are `Config.GetFuel`, `Config.SetFuel`
   and `Config.GiveKey` at the top of `config.lua` — currently `sofy-fuel` and
-  `vehiclekeys:client:SetOwner`.
+  `vehiclekeys:client:SetOwner`. All three run **client-side**.

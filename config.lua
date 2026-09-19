@@ -63,7 +63,9 @@ Config.WarpIntoVehicle = false
 Config.RestoreOnStart = false
 
 -- ---------------------------------------------------------------------------
--- Server hooks -- these are the only places jgrp-garage touches other resources.
+-- Integration hooks -- the only places jgrp-garage touches other resources.
+-- All three run CLIENT-side (client/main.lua), so they have access to the
+-- vehicle entity but not to a player's server id.
 -- ---------------------------------------------------------------------------
 
 function Config.GetFuel(vehicle)
@@ -910,7 +912,7 @@ Config.Lots = {
             vector4(51.66, 6365.04, 30.4, 211.77),
             vector4(48.57, 6362.41, 30.4, 210.29),
             vector4(50.63, 6393.65, 30.39, 214.19),
-            vector4(47.77, 6390.93, 30.39, 216.3)
+            vector4(47.77, 6390.93, 30.39, 216.3),
             vector4(45.31, 6387.94, 30.39, 214.77),
             vector4(42.64, 6385.02, 30.39, 210.36),
             vector4(40.06, 6382.06, 30.39, 210.06),
@@ -936,7 +938,7 @@ Config.Lots = {
             vector4(24.33, 6329.44, 30.4, 17.65),
             vector4(21.04, 6327.19, 30.39, 16.33),
             vector4(17.8, 6325.34, 30.39, 18.4),
-            vector4(14.34, 6323.88, 30.4, 14.39)
+            vector4(14.34, 6323.88, 30.4, 14.39),
             vector4(10.86, 6321.81, 30.4, 14.85),
             vector4(7.62, 6319.48, 30.4, 16.6),
             vector4(-0.19, 6341.23, 30.39, 211.57),
