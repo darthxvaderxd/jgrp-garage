@@ -80,10 +80,12 @@ whether each one has a blip:
 
 ```
 [jgrp-garage] debug on, 14 lot(s) loaded
-  pillbox         "Pillbox Parking"     5 spots  4 bounds points  z 25.5..35.5  blip: yes
-  route_68_motel  "Route 68 Motel"      1 spots  4 bounds points  z 39.7..49.7  blip: yes
+  pillbox         "Pillbox Parking"    61 spots  4 bounds points  z 25.5..35.5  blip: yes
+  route_68_motel  "Route 68 Motel"     10 spots  4 bounds points  z 39.7..49.7  blip: yes
   ...
 ```
+
+14 lots, 483 spots in total.
 
 ox_lib's own zone debug is deliberately not used — it fills the whole volume with
 solid polygons, which hides the spots inside a car park.
