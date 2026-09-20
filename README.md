@@ -117,3 +117,54 @@ With `Config.Debug = true`, four commands are available:
 - The only places it touches other resources are `Config.GetFuel`, `Config.SetFuel`
   and `Config.GiveKey` at the top of `config.lua` — currently `sofy-fuel` and
   `vehiclekeys:client:SetOwner`. All three run **client-side**.
+
+## The impound
+
+One lot in `Config.Lots` carries `impound = true`, and it behaves differently
+from the rest:
+
+- **You cannot park there.** The Park option never appears, and the server
+  refuses a park aimed at it.
+- **What it lists is whatever the police have impounded** — your vehicles with
+  a `depotprice` on them, wherever they were parked when they were taken.
+- **Taking one back costs the fee the police set**, cash first and then bank,
+  the order qb-garages used. The fee is taken before the car is spawned and
+  handed back if the spawn fails.
+- Releasing clears `depotprice`, which is what takes the car out of the pound —
+  the listing is keyed on that column, so nothing else needs writing.
+
+It sits on **qb-garages' own `depotLot` coordinates** (671.38, 233.19, 94.2),
+deliberately: players already know to go there, so taking the impound over
+rather than moving it means nobody has to be told anything.
+
+**Impounding is qb-policejob's job, not this one's.** It writes `depotprice`
+straight onto `player_vehicles`, which is why the pound keeps working with
+qb-garages gone. This lot is only the counter you pay at.
+
+`Config.ImpoundFallbackPrice` (500) covers a row that arrived with no fee set.
+
+### Cars left out when the server restarts
+
+`Config.ImpoundOnStart` (on) impounds every vehicle that was still out in the
+world (`state = 0`) when the resource starts, at `Config.ImpoundOnStartPrice`
+($250).
+
+Those cars have no entity any more and nobody parked them, so the choice is
+between quietly marking them stored — a free garage for anyone who logs off in
+the street — and towing them. This is the tow, which is what qb-garages did.
+
+A fee the police already set is **never overwritten**: `depotprice > 0` means
+the car was impounded for a reason, and a restart should not make it cheaper or
+dearer to get back.
+
+It is mutually exclusive with `Config.RestoreOnStart`, which puts those same
+cars back in their lots instead. They disagree about the same rows, so if both
+are on, impounding wins.
+
+### The PD impound menu
+
+`qb-policejob` asks `qb-garages:server:GetDepotVehiclesPD` for the list of
+seized (`state = 2`) vehicles. **Nothing has ever answered that callback** — it
+is called in `policeimpound.lua` and defined nowhere, in qb-garages or anywhere
+else, so that menu has been dead for as long as it has existed. jgrp-garage now
+registers it under the same name, so it works.

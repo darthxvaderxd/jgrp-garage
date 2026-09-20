@@ -34,6 +34,11 @@ Config.ListIcon = 'car-rear'
 Config.ParkTitle = 'Park Vehicle'
 Config.ListTitle = 'Parking Lot'
 
+-- What the same option is called at an impound lot, where it lists what the
+-- police have towed rather than what you parked.
+Config.ImpoundTitle = 'Impound Lot'
+Config.ImpoundIcon = 'money-bill'
+
 -- How close your vehicle must be to a spot's coords for that spot to count as the
 -- one you are sitting in. Roughly half a parking bay.
 Config.SpotRadius = 3.0
@@ -60,7 +65,28 @@ Config.WarpIntoVehicle = false
 
 -- On resource start, mark every vehicle whose garage is a jgrp lot as stored again.
 -- Off by default: it rewrites rows other garage scripts may also own.
+--
+-- Mutually exclusive with Config.ImpoundOnStart below -- one puts cars back in
+-- their lots, the other puts them in the pound, and they cannot both be right.
+-- Impounding wins if both are on.
 Config.RestoreOnStart = false
+
+-- On resource start, impound every vehicle left out in the world.
+--
+-- A restart leaves owned cars that were driving around with nowhere to be:
+-- nobody parked them, and the vehicle entities are gone. Impounding them is
+-- what qb-garages did, and it is the honest outcome -- the car was not put
+-- away, so it gets towed, and the owner pays to get it back.
+--
+-- Only rows that are actually out (`state = 0`) are touched, and a fee the
+-- police already set is never overwritten -- being impounded twice should not
+-- make a car cheaper or dearer to release.
+Config.ImpoundOnStart = true
+
+-- What the tow costs. Separate from Config.ImpoundFallbackPrice, which is for a
+-- police impound that arrived without a fee -- this one is the restart tow, and
+-- servers usually want it cheaper than a seizure.
+Config.ImpoundOnStartPrice = 250
 
 -- ---------------------------------------------------------------------------
 -- Integration hooks -- the only places jgrp-garage touches other resources.
@@ -104,6 +130,8 @@ Config.VehicleClasses = {
 --  blip     table?    { label, sprite, colour, scale }. Omit it, or set it to
 --                     false, and the lot gets no map blip at all.
 --  classes  array?    Config.VehicleClasses[...] to restrict what may park here
+--  impound  boolean?  makes this lot the impound instead of a parking lot --
+--                     see the impound lot at the bottom of this file
 --
 -- POLYGON bounds -- an outline of vec3 points plus a vertical thickness:
 --      bounds = { points = { vec3(...), vec3(...), ... }, thickness = 10.0 }
@@ -111,6 +139,11 @@ Config.VehicleClasses = {
 -- BOX bounds -- a centre, a size and an optional heading:
 --      bounds = { center = vec3(...), size = vec3(30.0, 20.0, 10.0), rotation = 0.0 }
 --
+--- What the impound charges when the police did not set a fee -- a vehicle with
+--- no `depotprice` on it. qb-policejob normally sets one per impound; this is
+--- only the floor for rows that arrived without.
+Config.ImpoundFallbackPrice = 500
+
 Config.Lots = {
 
     pillbox = {
@@ -957,5 +990,47 @@ Config.Lots = {
             scale = 0.7
         },
         classes = Config.VehicleClasses['car']
+    },
+
+    -- --- The impound -------------------------------------------------------
+    --
+    -- Not a parking lot: you cannot leave a car here, and what you can take out
+    -- is whatever the police have impounded, once you have paid the fee they
+    -- set. Cars arrive here by police action, never by parking.
+    --
+    -- Coordinates are qb-garages' own `depotLot`, deliberately: it is where
+    -- players already know to go, and taking the impound over rather than
+    -- moving it means nobody has to be told anything.
+    --
+    -- Impounding itself is qb-policejob's, not ours. It writes `depotprice`
+    -- straight onto `player_vehicles` -- this lot is only the counter you pay
+    -- at, which is why it keeps working with qb-garages gone.
+
+    impound = {
+        label = 'Impound Lot',
+        impound = true,
+
+        bounds = {
+            center = vector3(671.38, 233.19, 94.20),
+            size = vector3(60.0, 50.0, 12.0),
+            rotation = 0.0
+        },
+
+        spots = {
+            vector4(680.63, 233.16, 93.23, 240.44),
+            vector4(683.24, 236.35, 93.23, 240.44),
+            vector4(685.86, 239.55, 93.23, 240.44),
+            vector4(678.02, 229.97, 93.23, 240.44),
+            vector4(675.41, 226.78, 93.23, 240.44)
+        },
+
+        blip = {
+            label = 'Impound Lot',
+            sprite = 68,
+            colour = 5,
+            scale = 0.8
+        },
+
+        classes = Config.VehicleClasses['all']
     },
 }

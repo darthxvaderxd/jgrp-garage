@@ -51,8 +51,10 @@ local function showList(show)
     if show then
         exports['qb-radialmenu']:AddOption({
             id = LIST_OPTION,
-            title = Config.ListTitle,
-            icon = Config.ListIcon,
+            -- The pound lists what was towed, not what you parked, so it is
+            -- not called the same thing.
+            title = (currentLot and currentLot.impound) and Config.ImpoundTitle or Config.ListTitle,
+            icon = (currentLot and currentLot.impound) and Config.ImpoundIcon or Config.ListIcon,
             type = 'client',
             event = 'jgrp-garage:client:openLot',
             shouldClose = true
@@ -89,7 +91,7 @@ local function watchLot(lot, mine)
 
             if vehicle ~= 0 and GetPedInVehicleSeat(vehicle, -1) == ped then
                 showList(false)
-                currentSpot = JGRPGarage.GetSpotAt(lot, GetEntityCoords(vehicle))
+                currentSpot = not lot.impound and JGRPGarage.GetSpotAt(lot, GetEntityCoords(vehicle)) or nil
                 showPark(currentSpot ~= nil)
             else
                 showPark(false)
@@ -252,7 +254,11 @@ local function retrieve(lotId, plate)
 
     busy = false
 
-    if result.wasPreferred then
+    -- A released car has no remembered spot to have been given back, so the
+    -- spot messages would be noise -- what matters is what it cost.
+    if result.fee then
+        notify(('Released for $%d.'):format(result.fee), 'success')
+    elseif result.wasPreferred then
         notify(('Your vehicle is waiting in spot %d.'):format(result.spotIndex), 'success')
     else
         notify(('Your spot was taken -- parked in spot %d instead.'):format(result.spotIndex), 'primary')
@@ -272,7 +278,9 @@ AddEventHandler('jgrp-garage:client:openLot', function()
     local vehicles = lib.callback.await('jgrp-garage:server:getVehicles', false, lot.id)
 
     if not vehicles or #vehicles == 0 then
-        return notify('You have nothing parked here.', 'error')
+        return notify(lot.impound
+            and 'The impound is not holding anything of yours.'
+            or 'You have nothing parked here.', 'error')
     end
 
     local options = {}
@@ -283,16 +291,26 @@ AddEventHandler('jgrp-garage:client:openLot', function()
         local name = data and ('%s %s'):format(data.brand, data.name) or row.vehicle
         local spot = tonumber(row.parkingspot)
 
+        local fee = lot.impound and math.floor(tonumber(row.depotprice) or 0) or nil
+
+        local metadata = {
+            { label = 'Plate',  value = row.plate },
+            { label = 'Fuel',   value = ('%d%%'):format(math.floor(tonumber(row.fuel) or 100)) },
+            { label = 'Engine', value = conditionOf(row.engine) },
+            { label = 'Body',   value = conditionOf(row.body) }
+        }
+
+        if fee then
+            table.insert(metadata, 1, { label = 'Release fee', value = ('$%d'):format(fee) })
+        end
+
         options[#options + 1] = {
             title = name,
-            description = spot and ('Spot %d'):format(spot) or 'No spot recorded',
-            icon = 'car',
-            metadata = {
-                { label = 'Plate',  value = row.plate },
-                { label = 'Fuel',   value = ('%d%%'):format(math.floor(tonumber(row.fuel) or 100)) },
-                { label = 'Engine', value = conditionOf(row.engine) },
-                { label = 'Body',   value = conditionOf(row.body) }
-            },
+            description = fee
+                and ('$%d to release'):format(fee)
+                or (spot and ('Spot %d'):format(spot) or 'No spot recorded'),
+            icon = lot.impound and 'money-bill' or 'car',
+            metadata = metadata,
             onSelect = function()
                 retrieve(lot.id, row.plate)
             end

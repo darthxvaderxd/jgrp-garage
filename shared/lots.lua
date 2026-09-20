@@ -133,7 +133,14 @@ local function buildLots()
                 radius = radius,
                 spots = spots,
                 blip = raw.blip,
-                classes = raw.classes
+                classes = raw.classes,
+
+                -- Carried through explicitly, like everything else here. This
+                -- builder copies named fields rather than the raw table, so a
+                -- flag that is not listed is silently dropped -- which is how
+                -- the impound spent its first outing behaving as an ordinary
+                -- parking lot with an ordinary label.
+                impound = raw.impound == true
             }
         end
 

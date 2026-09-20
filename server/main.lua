@@ -19,6 +19,30 @@ local function ensureSchema()
     print('^2[jgrp-garage]^7 added `parkingspot` column to `player_vehicles`')
 end
 
+--- Tow in everything that was left out when the server went down.
+---
+--- Those cars have no entity any more and nobody parked them, so the choice is
+--- between quietly marking them stored -- a free garage for anyone who logs off
+--- in the street -- and impounding them. This is the second, which is what
+--- qb-garages did.
+---
+--- A fee the police already set is left alone: `depotprice > 0` means this car
+--- was impounded for a reason, and a restart should not make it cheaper or
+--- dearer to get back.
+local function impoundOnStart()
+    local price = math.max(1, math.floor(Config.ImpoundOnStartPrice or 250))
+
+    local affected = MySQL.update.await([[
+        UPDATE player_vehicles
+        SET depotprice = ?
+        WHERE state = 0 AND (depotprice IS NULL OR depotprice <= 0)
+    ]], { price })
+
+    if affected and affected > 0 then
+        print(('^2[jgrp-garage]^7 impounded %d vehicle(s) left out, $%d each'):format(affected, price))
+    end
+end
+
 local function restoreOnStart()
     if not Config.RestoreOnStart then return end
 
@@ -45,7 +69,14 @@ AddEventHandler('onResourceStart', function(resource)
     if resource ~= GetCurrentResourceName() then return end
 
     ensureSchema()
-    restoreOnStart()
+
+    -- Impounding wins over restoring: they disagree about the same rows, and a
+    -- car cannot be both back in its lot and in the pound.
+    if Config.ImpoundOnStart then
+        impoundOnStart()
+    else
+        restoreOnStart()
+    end
 end)
 
 -- ---------------------------------------------------------------------------
@@ -129,6 +160,23 @@ end
 -- ---------------------------------------------------------------------------
 
 --- The caller's vehicles stored in this lot, for the context menu.
+--- What the impound is holding for you.
+---
+--- Keyed on `depotprice`, not on `garage`: a car is impounded by the police
+--- writing a fee onto it, wherever it was, so which garage it belonged to says
+--- nothing about whether it is in the pound. That is qb-garages' own rule and
+--- the reason this keeps working with qb-garages gone.
+local function impoundedVehicles(citizenid)
+    local rows = MySQL.query.await([[
+        SELECT plate, vehicle, fuel, engine, body, depotprice, state
+        FROM player_vehicles
+        WHERE citizenid = ? AND depotprice > 0 AND state != 2
+        ORDER BY depotprice
+    ]], { citizenid })
+
+    return rows or {}
+end
+
 lib.callback.register('jgrp-garage:server:getVehicles', function(source, lotId)
     local Player = getPlayer(source)
     if not Player then return {} end
@@ -138,6 +186,10 @@ lib.callback.register('jgrp-garage:server:getVehicles', function(source, lotId)
 
     local coords = GetEntityCoords(GetPlayerPed(source))
     if not JGRPGarage.IsInsideLot(lot, coords, Config.RetrieveTolerance) then return {} end
+
+    if lot.impound then
+        return impoundedVehicles(Player.PlayerData.citizenid)
+    end
 
     local rows = MySQL.query.await([[
         SELECT plate, vehicle, fuel, engine, body, parkingspot
@@ -158,6 +210,9 @@ lib.callback.register('jgrp-garage:server:park', function(source, data)
 
     local lot = JGRPGarage.GetLot(data.lotId)
     if not lot then return false, 'Unknown parking lot' end
+
+    -- The pound is somewhere cars are put, not somewhere you put them.
+    if lot.impound then return false, 'You cannot leave a car at the impound' end
 
     local spotIndex = tonumber(data.spotIndex)
     if not spotIndex or not lot.spots[spotIndex] then return false, 'Not in a parking spot' end
@@ -231,13 +286,43 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
         return false, 'You are not in this parking lot'
     end
 
-    local row = MySQL.single.await([[
-        SELECT plate, vehicle, mods, fuel, engine, body, parkingspot
-        FROM player_vehicles
-        WHERE plate = ? AND citizenid = ? AND garage = ? AND state = 1
-    ]], { plate, Player.PlayerData.citizenid, lot.id })
+    local row, fee
 
-    if not row then return false, 'That vehicle is not in this lot' end
+    if lot.impound then
+        row = MySQL.single.await([[
+            SELECT plate, vehicle, mods, fuel, engine, body, depotprice
+            FROM player_vehicles
+            WHERE plate = ? AND citizenid = ? AND depotprice > 0 AND state != 2
+        ]], { plate, Player.PlayerData.citizenid })
+
+        if not row then return false, 'The impound is not holding that vehicle' end
+
+        fee = math.floor(tonumber(row.depotprice) or 0)
+        if fee < 1 then fee = Config.ImpoundFallbackPrice or 500 end
+
+        -- Cash first, then the bank, which is the order qb-garages used and the
+        -- one players expect. Taken before the car is spawned: a spawn that
+        -- fails after payment would be a fee for nothing.
+        local paid = false
+
+        if Player.PlayerData.money.cash >= fee then
+            paid = Player.Functions.RemoveMoney('cash', fee, 'jgrp-garage:impound')
+        elseif Player.PlayerData.money.bank >= fee then
+            paid = Player.Functions.RemoveMoney('bank', fee, 'jgrp-garage:impound')
+        end
+
+        if not paid then
+            return false, ('You cannot afford the $%d release fee'):format(fee)
+        end
+    else
+        row = MySQL.single.await([[
+            SELECT plate, vehicle, mods, fuel, engine, body, parkingspot
+            FROM player_vehicles
+            WHERE plate = ? AND citizenid = ? AND garage = ? AND state = 1
+        ]], { plate, Player.PlayerData.citizenid, lot.id })
+
+        if not row then return false, 'That vehicle is not in this lot' end
+    end
 
     local spotIndex = pickSpot(lot, tonumber(row.parkingspot))
     if not spotIndex then return false, 'Every spot in this lot is taken' end
@@ -247,7 +332,16 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
         joaat(row.vehicle), getVehicleType(row.vehicle), spot.x, spot.y, spot.z, spot.w
     )
 
-    if not vehicle or vehicle == 0 then return false, 'Could not spawn that vehicle' end
+    --- Hand the fee back. Anything that fails after payment has to do this, or
+    --- the pound keeps the money and the car.
+    local function refund()
+        if fee then Player.Functions.AddMoney('cash', fee, 'jgrp-garage:impound-refund') end
+    end
+
+    if not vehicle or vehicle == 0 then
+        refund()
+        return false, 'Could not spawn that vehicle'
+    end
 
     local timeout = 0
 
@@ -256,14 +350,27 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
         timeout = timeout + 1
     end
 
-    if not DoesEntityExist(vehicle) then return false, 'Could not spawn that vehicle' end
+    if not DoesEntityExist(vehicle) then
+        refund()
+        return false, 'Could not spawn that vehicle'
+    end
 
     SetVehicleNumberPlateText(vehicle, plate)
 
-    MySQL.update.await(
-        'UPDATE player_vehicles SET state = 0 WHERE plate = ? AND citizenid = ?',
-        { plate, Player.PlayerData.citizenid }
-    )
+    -- Clearing `depotprice` is what takes it out of the pound: the next listing
+    -- is keyed on that column, so a released car stops appearing without
+    -- anything else being written.
+    if lot.impound then
+        MySQL.update.await(
+            'UPDATE player_vehicles SET state = 0, depotprice = 0 WHERE plate = ? AND citizenid = ?',
+            { plate, Player.PlayerData.citizenid }
+        )
+    else
+        MySQL.update.await(
+            'UPDATE player_vehicles SET state = 0 WHERE plate = ? AND citizenid = ?',
+            { plate, Player.PlayerData.citizenid }
+        )
+    end
 
     local props = row.mods and json.decode(row.mods) or {}
 
@@ -273,6 +380,32 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
         props = props,
         fuel = row.fuel or 100,
         spotIndex = spotIndex,
-        wasPreferred = tonumber(row.parkingspot) == spotIndex
+        wasPreferred = tonumber(row.parkingspot) == spotIndex,
+        fee = fee
     }
+end)
+
+-- ---------------------------------------------------------------------------
+-- The police side
+-- ---------------------------------------------------------------------------
+
+--- Seized vehicles, for qb-policejob's impound menu.
+---
+--- Registered under qb-garages' name on purpose: qb-policejob has always asked
+--- `qb-garages:server:GetDepotVehiclesPD` for this list, and **nothing has ever
+--- answered it** -- the callback was called but never defined, in qb-garages or
+--- anywhere else, so that menu has been dead the whole time. Answering it here
+--- costs nothing and makes it work.
+QBCore.Functions.CreateCallback('qb-garages:server:GetDepotVehiclesPD', function(source, cb)
+    local Player = getPlayer(source)
+    if not Player then return cb({}) end
+
+    local rows = MySQL.query.await([[
+        SELECT plate, vehicle, fuel, engine, body, depotprice, state
+        FROM player_vehicles
+        WHERE state = 2
+        ORDER BY plate
+    ]])
+
+    cb(rows or {})
 end)
