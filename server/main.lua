@@ -87,6 +87,18 @@ local function getPlayer(source)
     return QBCore.Functions.GetPlayer(source)
 end
 
+--- Dead, in last stand or handcuffed: no work, no crime.
+local function incapacitated(src)
+    local Player = QBCore.Functions.GetPlayer(src)
+    if not Player then return true end
+
+    local md = Player.PlayerData.metadata or {}
+    if md.isdead or md.inlaststand or md.ishandcuffed then return true end
+
+    local ped = GetPlayerPed(src)
+    return ped ~= 0 and GetEntityHealth(ped) <= 0
+end
+
 local function normalisePlate(plate)
     if type(plate) ~= 'string' then return nil end
 
@@ -206,6 +218,11 @@ lib.callback.register('jgrp-garage:server:park', function(source, data)
     local Player = getPlayer(source)
     if not Player then return false, 'Not loaded' end
 
+    if incapacitated(source) then
+        TriggerClientEvent('QBCore:Notify', source, "You can't do that right now.", 'error')
+        return false, 'incapacitated'
+    end
+
     if type(data) ~= 'table' then return false, 'Bad request' end
 
     local lot = JGRPGarage.GetLot(data.lotId)
@@ -274,6 +291,11 @@ end)
 lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, plate)
     local Player = getPlayer(source)
     if not Player then return false, 'Not loaded' end
+
+    if incapacitated(source) then
+        TriggerClientEvent('QBCore:Notify', source, "You can't do that right now.", 'error')
+        return false, 'incapacitated'
+    end
 
     local lot = JGRPGarage.GetLot(lotId)
     if not lot then return false, 'Unknown parking lot' end

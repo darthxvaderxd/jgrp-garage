@@ -12,6 +12,11 @@ local function notify(message, type)
     QBCore.Functions.Notify(message, type or 'primary')
 end
 
+local function incapacitated()
+    local md = QBCore.Functions.GetPlayerData().metadata or {}
+    return (md.isdead or md.inlaststand or md.ishandcuffed or IsPedDeadOrDying(PlayerPedId(), true)) and true or false
+end
+
 -- ---------------------------------------------------------------------------
 -- Radial menu
 -- ---------------------------------------------------------------------------
@@ -127,6 +132,10 @@ end
 AddEventHandler('jgrp-garage:client:park', function()
     if busy then return end
 
+    if incapacitated() then
+        return notify("You can't do that right now.", 'error')
+    end
+
     local lot, spotIndex = currentLot, currentSpot
 
     if not lot or not spotIndex then
@@ -158,6 +167,11 @@ AddEventHandler('jgrp-garage:client:park', function()
         if not finished then
             busy = false
             return
+        end
+
+        if incapacitated() then
+            busy = false
+            return notify("You can't do that right now.", 'error')
         end
 
         -- The car may have rolled out of the spot while the bar ran.
@@ -271,6 +285,10 @@ end
 
 AddEventHandler('jgrp-garage:client:openLot', function()
     if busy then return end
+
+    if incapacitated() then
+        return notify("You can't do that right now.", 'error')
+    end
 
     local lot = currentLot
     if not lot then return end
