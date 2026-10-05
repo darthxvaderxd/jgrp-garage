@@ -1,5 +1,12 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
+--- Display name for log lines: character name, else the Cfx player name.
+local function jgrpLogName(src, Player)
+    local ci = Player and Player.PlayerData and Player.PlayerData.charinfo
+    if ci and ci.firstname then return ('%s %s'):format(ci.firstname, ci.lastname or '') end
+    return GetPlayerName(src) or 'Unknown'
+end
+
 -- ---------------------------------------------------------------------------
 -- Schema
 -- ---------------------------------------------------------------------------
@@ -284,6 +291,10 @@ lib.callback.register('jgrp-garage:server:park', function(source, data)
 
     DeleteEntity(entity)
 
+    TriggerEvent('jgrp-logging:server:logPlayer', source, 'vehicle.garage.park',
+        ('%s parked %s in %s'):format(jgrpLogName(source, Player), row.vehicle, lot.id),
+        { plate = plate, model = row.vehicle, lot = lot.id, spot = spotIndex })
+
     return true, ('Stored in spot %d'):format(spotIndex)
 end)
 
@@ -395,6 +406,16 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
     end
 
     local props = row.mods and json.decode(row.mods) or {}
+
+    if lot.impound then
+        TriggerEvent('jgrp-logging:server:logPlayer', source, 'vehicle.garage.impound.release',
+            ('%s paid $%d to release %s from the impound'):format(jgrpLogName(source, Player), fee, row.vehicle),
+            { plate = plate, model = row.vehicle, lot = lot.id, fee = fee })
+    else
+        TriggerEvent('jgrp-logging:server:logPlayer', source, 'vehicle.garage.retrieve',
+            ('%s retrieved %s from %s'):format(jgrpLogName(source, Player), row.vehicle, lot.id),
+            { plate = plate, model = row.vehicle, lot = lot.id, spot = spotIndex })
+    end
 
     return true, {
         netId = NetworkGetNetworkIdFromEntity(vehicle),
