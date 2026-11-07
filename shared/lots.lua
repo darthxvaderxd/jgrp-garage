@@ -76,75 +76,85 @@ local function pointInPolygon(polygon, x, y)
     return inside
 end
 
+--- Builds one normalised lot from its raw config entry, or nil (and a console
+--- line) when it has no usable bounds or no spots.
+local function buildLot(id, raw)
+    local polygon, minZ, maxZ = normaliseBounds(raw.bounds)
+
+    if not polygon then
+        print(('^1[jgrp-garage]^7 lot "%s" has no usable bounds -- skipped'):format(id))
+        return nil
+    end
+
+    if type(raw.spots) ~= 'table' or #raw.spots == 0 then
+        print(('^1[jgrp-garage]^7 lot "%s" has no spots -- skipped'):format(id))
+        return nil
+    end
+
+    -- Centre of the bounds, and the distance from it to the furthest corner.
+    -- Used for the blip, and as a cheap first-pass distance check.
+    local sumX, sumY = 0.0, 0.0
+
+    for i = 1, #polygon do
+        sumX = sumX + polygon[i].x
+        sumY = sumY + polygon[i].y
+    end
+
+    local centreX, centreY = sumX / #polygon, sumY / #polygon
+    local radius = 0.0
+
+    for i = 1, #polygon do
+        local dx, dy = polygon[i].x - centreX, polygon[i].y - centreY
+        local distance = math.sqrt(dx * dx + dy * dy)
+        if distance > radius then radius = distance end
+    end
+
+    local spots = {}
+
+    for i = 1, #raw.spots do
+        local spot = raw.spots[i]
+        spots[i] = {
+            x = spot.x + 0.0,
+            y = spot.y + 0.0,
+            z = spot.z + 0.0,
+            w = (spot.w or 0.0) + 0.0
+        }
+    end
+
+    return {
+        id = id,
+        label = raw.label or id,
+        polygon = polygon,
+        minZ = minZ,
+        maxZ = maxZ,
+        centre = vec3(centreX, centreY, (minZ + maxZ) * 0.5),
+        radius = radius,
+        spots = spots,
+        blip = raw.blip,
+        classes = raw.classes,
+
+        -- Carried through explicitly, like everything else here. This
+        -- builder copies named fields rather than the raw table, so a
+        -- flag that is not listed is silently dropped -- which is how
+        -- the impound spent its first outing behaving as an ordinary
+        -- parking lot with an ordinary label.
+        impound = raw.impound == true,
+
+        -- House garages (see server/houses.lua): not in Config.Lots, built on
+        -- demand. `legacyGarage` is the `garage` value qb-garages stored for the
+        -- same house, so cars parked there before the retirement still list.
+        house = raw.house == true,
+        legacyGarage = raw.legacyGarage
+    }
+end
+
+JGRPGarage.BuildLot = buildLot
+
 local function buildLots()
     local lots = {}
 
     for id, raw in pairs(Config.Lots or {}) do
-        local polygon, minZ, maxZ = normaliseBounds(raw.bounds)
-
-        if not polygon then
-            print(('^1[jgrp-garage]^7 lot "%s" has no usable bounds -- skipped'):format(id))
-            goto continue
-        end
-
-        if type(raw.spots) ~= 'table' or #raw.spots == 0 then
-            print(('^1[jgrp-garage]^7 lot "%s" has no spots -- skipped'):format(id))
-            goto continue
-        end
-
-        do
-            -- Centre of the bounds, and the distance from it to the furthest corner.
-            -- Used for the blip, and as a cheap first-pass distance check.
-            local sumX, sumY = 0.0, 0.0
-
-            for i = 1, #polygon do
-                sumX = sumX + polygon[i].x
-                sumY = sumY + polygon[i].y
-            end
-
-            local centreX, centreY = sumX / #polygon, sumY / #polygon
-            local radius = 0.0
-
-            for i = 1, #polygon do
-                local dx, dy = polygon[i].x - centreX, polygon[i].y - centreY
-                local distance = math.sqrt(dx * dx + dy * dy)
-                if distance > radius then radius = distance end
-            end
-
-            local spots = {}
-
-            for i = 1, #raw.spots do
-                local spot = raw.spots[i]
-                spots[i] = {
-                    x = spot.x + 0.0,
-                    y = spot.y + 0.0,
-                    z = spot.z + 0.0,
-                    w = (spot.w or 0.0) + 0.0
-                }
-            end
-
-            lots[id] = {
-                id = id,
-                label = raw.label or id,
-                polygon = polygon,
-                minZ = minZ,
-                maxZ = maxZ,
-                centre = vec3(centreX, centreY, (minZ + maxZ) * 0.5),
-                radius = radius,
-                spots = spots,
-                blip = raw.blip,
-                classes = raw.classes,
-
-                -- Carried through explicitly, like everything else here. This
-                -- builder copies named fields rather than the raw table, so a
-                -- flag that is not listed is silently dropped -- which is how
-                -- the impound spent its first outing behaving as an ordinary
-                -- parking lot with an ordinary label.
-                impound = raw.impound == true
-            }
-        end
-
-        ::continue::
+        lots[id] = buildLot(id, raw)
     end
 
     return lots

@@ -29,7 +29,7 @@ Config.Debug = false
 
 -- Font Awesome 6 solid icon names, as used by qb-radialmenu.
 Config.ParkIcon = 'square-parking'
-Config.ListIcon = 'car-rear'
+Config.ListIcon = 'car-side' -- qb-radialmenu's built-in set has no 'car-rear' (FA6); it showed a ? and logged an error
 
 Config.ParkTitle = 'Park Vehicle'
 Config.ListTitle = 'Parking Lot'
@@ -55,6 +55,13 @@ Config.RetrieveTolerance = 5.0
 
 -- How often the client re-checks which spot you are sitting in, while inside a lot.
 Config.PollInterval = 300
+
+-- House garages (qb-houses, sofy-housing). How many cars fit, how far apart the
+-- spots are (metres, sideways from the garage point), and how often the client
+-- re-asks the server which house garages it can use.
+Config.HouseSpots = 2
+Config.HouseSpotSpacing = 3.2
+Config.HouseRefreshMs = 30000
 
 -- Progress bar shown while parking, in ms. 0 parks instantly.
 Config.ParkDuration = 1500
