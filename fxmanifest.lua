@@ -10,7 +10,8 @@ version '1.0.0'
 shared_scripts {
     '@ox_lib/init.lua',
     'config.lua',
-    'shared/lots.lua'
+    'shared/lots.lua',
+    'shared/houses.lua'
 }
 
 client_scripts {
@@ -20,6 +21,7 @@ client_scripts {
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
+    'server/houses.lua',
     'server/main.lua'
 }
 

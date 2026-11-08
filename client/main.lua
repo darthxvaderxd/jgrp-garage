@@ -12,6 +12,11 @@ local function notify(message, type)
     QBCore.Functions.Notify(message, type or 'primary')
 end
 
+local function incapacitated()
+    local md = QBCore.Functions.GetPlayerData().metadata or {}
+    return (md.isdead or md.inlaststand or md.ishandcuffed or IsPedDeadOrDying(PlayerPedId(), true)) and true or false
+end
+
 -- ---------------------------------------------------------------------------
 -- Radial menu
 -- ---------------------------------------------------------------------------
@@ -132,6 +137,10 @@ end
 AddEventHandler('jgrp-garage:client:park', function()
     if busy then return end
 
+    if incapacitated() then
+        return notify("You can't do that right now.", 'error')
+    end
+
     local lot, spotIndex = currentLot, currentSpot
 
     if not lot or not spotIndex then
@@ -163,6 +172,11 @@ AddEventHandler('jgrp-garage:client:park', function()
         if not finished then
             busy = false
             return
+        end
+
+        if incapacitated() then
+            busy = false
+            return notify("You can't do that right now.", 'error')
         end
 
         -- The car may have rolled out of the spot while the bar ran.
@@ -245,7 +259,25 @@ local function retrieve(lotId, plate)
     end
 
     if result.props and next(result.props) then
-        QBCore.Functions.SetVehicleProperties(vehicle, result.props)
+        -- LOCAL FIX (interim, until qb-core restarts with its own fix): qb-core threw
+        -- "invalid table argument" in SetVehicleColours when color1 is a custom {r,g,b}
+        -- table and color2 is a number. Hold color2 back and apply it ourselves.
+        local props = result.props
+        local heldColor2
+        if type(props.color1) == 'table' and type(props.color2) == 'number' then
+            heldColor2 = props.color2
+            props.color2 = nil
+        end
+
+        QBCore.Functions.SetVehicleProperties(vehicle, props)
+
+        if heldColor2 then
+            local primary = GetVehicleColours(vehicle)
+            ClearVehicleCustomSecondaryColour(vehicle)
+            SetVehicleColours(vehicle, primary, heldColor2)
+            -- SetVehicleColours resets custom primary paint; reapply it.
+            SetVehicleCustomPrimaryColour(vehicle, props.color1[1], props.color1[2], props.color1[3])
+        end
     end
 
     SetVehicleNumberPlateText(vehicle, result.plate)
@@ -276,6 +308,10 @@ end
 
 AddEventHandler('jgrp-garage:client:openLot', function()
     if busy then return end
+
+    if incapacitated() then
+        return notify("You can't do that right now.", 'error')
+    end
 
     local lot = currentLot
     if not lot then return end
@@ -356,25 +392,119 @@ local function createBlips()
     end
 end
 
+local function createZone(lot)
+    local midZ = (lot.minZ + lot.maxZ) * 0.5
+    local points = {}
+
+    for i = 1, #lot.polygon do
+        points[i] = vec3(lot.polygon[i].x, lot.polygon[i].y, midZ)
+    end
+
+    -- ox_lib's own zone debug fills the volume with solid polys, which hides
+    -- the spots inside a car park. client/dev.lua draws a wireframe instead.
+    return lib.zones.poly({
+        points = points,
+        thickness = lot.maxZ - lot.minZ,
+        onEnter = function() enterLot(lot) end,
+        onExit = function() exitLot(lot) end
+    })
+end
+
 local function createZones()
     for _, lot in pairs(JGRPGarage.Lots) do
-        local midZ = (lot.minZ + lot.maxZ) * 0.5
-        local points = {}
-
-        for i = 1, #lot.polygon do
-            points[i] = vec3(lot.polygon[i].x, lot.polygon[i].y, midZ)
-        end
-
-        -- ox_lib's own zone debug fills the volume with solid polys, which hides
-        -- the spots inside a car park. client/dev.lua draws a wireframe instead.
-        lib.zones.poly({
-            points = points,
-            thickness = lot.maxZ - lot.minZ,
-            onEnter = function() enterLot(lot) end,
-            onExit = function() exitLot(lot) end
-        })
+        createZone(lot)
     end
 end
+
+-- ---------------------------------------------------------------------------
+-- House garages
+-- ---------------------------------------------------------------------------
+
+local houseZones = {}   -- lot id -> { zone, sig, lot }
+local syncing = false
+
+local function removeHouseZone(id)
+    local entry = houseZones[id]
+    if not entry then return end
+
+    exitLot(entry.lot)
+    entry.zone:remove()
+    JGRPGarage.Lots[id] = nil
+    houseZones[id] = nil
+end
+
+local function clearHouseZones()
+    for id in pairs(houseZones) do removeHouseZone(id) end
+end
+
+--- Ask the server which house garages we may use and make the zones match.
+--- The server re-checks access on every park/retrieve, so this only decides what
+--- the client draws.
+local function syncHouseLots()
+    if syncing then return end
+    syncing = true
+
+    local okCall, list = pcall(lib.callback.await, 'jgrp-garage:server:getHouseLots', false)
+    if not okCall then list = nil end
+
+    if type(list) == 'table' then
+        local seen = {}
+
+        for _, h in ipairs(list) do
+            seen[h.id] = true
+
+            local g = h.g or {}
+            local sig = ('%s|%.2f|%.2f|%.2f|%.1f'):format(
+                h.label or '', tonumber(g.x) or 0, tonumber(g.y) or 0, tonumber(g.z) or 0,
+                tonumber(g.h) or tonumber(g.w) or 0)
+            local current = houseZones[h.id]
+
+            if not current or current.sig ~= sig then
+                if current then removeHouseZone(h.id) end
+
+                local raw = JGRPGarage.MakeHouseRaw(h.id, h.label, g, h.legacy)
+                local lot = raw and JGRPGarage.BuildLot(h.id, raw)
+
+                if lot then
+                    JGRPGarage.Lots[h.id] = lot
+                    houseZones[h.id] = { zone = createZone(lot), sig = sig, lot = lot }
+                end
+            end
+        end
+
+        for id in pairs(houseZones) do
+            if not seen[id] then removeHouseZone(id) end
+        end
+    end
+
+    syncing = false
+end
+
+local function loggedIn()
+    local data = QBCore.Functions.GetPlayerData()
+    return data and data.citizenid ~= nil
+end
+
+CreateThread(function()
+    while true do
+        if loggedIn() then syncHouseLots() end
+        Wait(Config.HouseRefreshMs or 30000)
+    end
+end)
+
+local function syncSoon()
+    CreateThread(function()
+        Wait(1500)
+        if loggedIn() then syncHouseLots() end
+    end)
+end
+
+-- Both housing scripts announce garage changes under qb-garages' old names.
+RegisterNetEvent('qb-garages:client:addHouseGarage', syncSoon)
+RegisterNetEvent('qb-garages:client:removeHouseGarage', syncSoon)
+RegisterNetEvent('qb-garages:client:houseGarageConfig', syncSoon)
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', syncSoon)
+RegisterNetEvent('QBCore:Client:OnPlayerUnload', clearHouseZones)
 
 CreateThread(function()
     createZones()

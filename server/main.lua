@@ -1,5 +1,12 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
+--- Display name for log lines: character name, else the Cfx player name.
+local function jgrpLogName(src, Player)
+    local ci = Player and Player.PlayerData and Player.PlayerData.charinfo
+    if ci and ci.firstname then return ('%s %s'):format(ci.firstname, ci.lastname or '') end
+    return GetPlayerName(src) or 'Unknown'
+end
+
 -- ---------------------------------------------------------------------------
 -- Schema
 -- ---------------------------------------------------------------------------
@@ -85,6 +92,18 @@ end)
 
 local function getPlayer(source)
     return QBCore.Functions.GetPlayer(source)
+end
+
+--- Dead, in last stand or handcuffed: no work, no crime.
+local function incapacitated(src)
+    local Player = QBCore.Functions.GetPlayer(src)
+    if not Player then return true end
+
+    local md = Player.PlayerData.metadata or {}
+    if md.isdead or md.inlaststand or md.ishandcuffed then return true end
+
+    local ped = GetPlayerPed(src)
+    return ped ~= 0 and GetEntityHealth(ped) <= 0
 end
 
 local function normalisePlate(plate)
@@ -201,6 +220,7 @@ lib.callback.register('jgrp-garage:server:getVehicles', function(source, lotId)
 
     local lot = JGRPGarage.GetLot(lotId)
     if not lot then return {} end
+    if lot.house and not JGRPGarage.House.CanUse(lot, Player.PlayerData.citizenid) then return {} end
 
     local coords = GetEntityCoords(GetPlayerPed(source))
     if not JGRPGarage.IsInsideLot(lot, coords, Config.RetrieveTolerance) then return {} end
@@ -214,9 +234,9 @@ lib.callback.register('jgrp-garage:server:getVehicles', function(source, lotId)
     local rows = MySQL.query.await([[
         SELECT plate, vehicle, fuel, engine, body, parkingspot
         FROM player_vehicles
-        WHERE citizenid = ? AND garage = ? AND state = 1
+        WHERE citizenid = ? AND garage IN (?, ?) AND state = 1
         ORDER BY parkingspot IS NULL, parkingspot
-    ]], { Player.PlayerData.citizenid, lotId })
+    ]], { Player.PlayerData.citizenid, lotId, lot.legacyGarage or lotId })
 
     return rows or {}
 end)
@@ -226,10 +246,16 @@ lib.callback.register('jgrp-garage:server:park', function(source, data)
     local Player = getPlayer(source)
     if not Player then return false, 'Not loaded' end
 
+    if incapacitated(source) then
+        TriggerClientEvent('QBCore:Notify', source, "You can't do that right now.", 'error')
+        return false, 'incapacitated'
+    end
+
     if type(data) ~= 'table' then return false, 'Bad request' end
 
     local lot = JGRPGarage.GetLot(data.lotId)
     if not lot then return false, 'Unknown parking lot' end
+    if lot.house and not JGRPGarage.House.CanUse(lot, Player.PlayerData.citizenid) then return false, 'You do not have access to this garage' end
 
     -- The pound is somewhere cars are put, not somewhere you put them.
     if lot.impound then return false, 'You cannot leave a car at the impound' end
@@ -292,6 +318,10 @@ lib.callback.register('jgrp-garage:server:park', function(source, data)
 
     DeleteEntity(entity)
 
+    TriggerEvent('jgrp-logging:server:logPlayer', source, 'vehicle.garage.park',
+        ('%s parked %s in %s'):format(jgrpLogName(source, Player), row.vehicle, lot.id),
+        { plate = plate, model = row.vehicle, lot = lot.id, spot = spotIndex })
+
     return true, ('Stored in spot %d'):format(spotIndex)
 end)
 
@@ -300,8 +330,14 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
     local Player = getPlayer(source)
     if not Player then return false, 'Not loaded' end
 
+    if incapacitated(source) then
+        TriggerClientEvent('QBCore:Notify', source, "You can't do that right now.", 'error')
+        return false, 'incapacitated'
+    end
+
     local lot = JGRPGarage.GetLot(lotId)
     if not lot then return false, 'Unknown parking lot' end
+    if lot.house and not JGRPGarage.House.CanUse(lot, Player.PlayerData.citizenid) then return false, 'You do not have access to this garage' end
 
     plate = normalisePlate(plate)
     if not plate then return false, 'Bad plate' end
@@ -345,8 +381,8 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
         row = MySQL.single.await([[
             SELECT plate, vehicle, mods, fuel, engine, body, parkingspot
             FROM player_vehicles
-            WHERE plate = ? AND citizenid = ? AND garage = ? AND state = 1
-        ]], { plate, Player.PlayerData.citizenid, lot.id })
+            WHERE plate = ? AND citizenid = ? AND garage IN (?, ?) AND state = 1
+        ]], { plate, Player.PlayerData.citizenid, lot.id, lot.legacyGarage or lot.id })
 
         if not row then return false, 'That vehicle is not in this lot' end
     end
@@ -400,6 +436,16 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
     end
 
     local props = row.mods and json.decode(row.mods) or {}
+
+    if lot.impound then
+        TriggerEvent('jgrp-logging:server:logPlayer', source, 'vehicle.garage.impound.release',
+            ('%s paid $%d to release %s from the impound'):format(jgrpLogName(source, Player), fee, row.vehicle),
+            { plate = plate, model = row.vehicle, lot = lot.id, fee = fee })
+    else
+        TriggerEvent('jgrp-logging:server:logPlayer', source, 'vehicle.garage.retrieve',
+            ('%s retrieved %s from %s'):format(jgrpLogName(source, Player), row.vehicle, lot.id),
+            { plate = plate, model = row.vehicle, lot = lot.id, spot = spotIndex })
+    end
 
     return true, {
         netId = NetworkGetNetworkIdFromEntity(vehicle),
