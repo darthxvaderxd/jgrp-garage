@@ -132,6 +132,7 @@ local function buildLot(id, raw)
         spots = spots,
         blip = raw.blip,
         classes = raw.classes,
+        job = raw.job,
 
         -- Carried through explicitly, like everything else here. This
         -- builder copies named fields rather than the raw table, so a

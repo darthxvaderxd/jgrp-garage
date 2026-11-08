@@ -151,6 +151,10 @@ Config.VehicleClasses = {
 --- only the floor for rows that arrived without.
 Config.ImpoundFallbackPrice = 500
 
+Config.LockedCategories = {
+    police = 'mission_row_police_department'
+}
+
 Config.Lots = {
 
     pillbox = {
@@ -1708,6 +1712,43 @@ Config.Lots = {
             vector4(-342.61, -759.99, 43.07, 90.64),
             vector4(-342.06, -763.96, 43.07, 91.24),
             vector4(-342.09, -767.42, 43.07, 91.56)
+        },
+        blip = false,
+        classes = Config.VehicleClasses['car']
+    },
+
+    mission_row_police_department = {
+        label = 'MRPD',
+        job = 'police',
+        bounds = {
+            points = {
+                vector3(448.23, -998.85, 25.7),
+                vector3(448.16, -984.13, 25.7),
+                vector3(427.98, -974.47, 25.7),
+                vector3(423.19, -974.21, 25.7),
+                vector3(423.23, -998.9, 25.7),
+            },
+            thickness = 10.0
+        },
+        spots = {
+            vector4(445.85, -997.1, 25.17, 88.68),
+            vector4(445.77, -994.15, 25.17, 91.46),
+            vector4(445.51, -991.58, 25.17, 89.46),
+            vector4(445.67, -988.96, 25.17, 90.09),
+            vector4(445.59, -986.2, 25.17, 89.87),
+            vector4(437.24, -986.08, 25.17, 269.6),
+            vector4(437.18, -988.81, 25.17, 269.64),
+            vector4(437.39, -991.49, 25.17, 270.61),
+            vector4(437.06, -994.19, 25.17, 270.71),
+            vector4(437.46, -997.0, 25.17, 270.05),
+            vector4(425.85, -997.01, 25.17, 270.08),
+            vector4(425.53, -994.33, 25.17, 271.58),
+            vector4(425.38, -991.67, 25.17, 271.03),
+            vector4(425.5, -988.99, 25.17, 271.71),
+            vector4(425.44, -984.24, 25.17, 269.63),
+            vector4(425.51, -981.4, 25.17, 271.75),
+            vector4(425.37, -978.91, 25.17, 269.59),
+            vector4(425.38, -976.18, 25.17, 269.05),
         },
         blip = false,
         classes = Config.VehicleClasses['car']

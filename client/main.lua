@@ -112,6 +112,11 @@ local function watchLot(lot, mine)
 end
 
 local function enterLot(lot)
+    if lot.job then
+        local job = QBCore.Functions.GetPlayerData().job
+        if not job or job.name ~= lot.job then return end
+    end
+
     generation = generation + 1
     currentLot = lot
     watchLot(lot, generation)
