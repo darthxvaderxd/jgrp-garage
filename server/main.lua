@@ -146,13 +146,31 @@ local classOfCategory = {
     sportsclassics = 5, sports = 6, super = 7, motorcycles = 8, offroad = 9,
     industrial = 10, utility = 11, vans = 12, cycles = 13, boats = 14,
     helicopters = 15, planes = 16, service = 17, emergency = 18, military = 19,
-    commercial = 20, trains = 21, openwheel = 22
+    commercial = 20, trains = 21, openwheel = 22, police = 18
 }
 
 local function getVehicleClass(model)
     local data = QBCore.Shared.Vehicles[model]
 
     return data and classOfCategory[data.category] or nil
+end
+
+local function getLockedLot(model)
+    local data = model and QBCore.Shared.Vehicles[model]
+
+    return data and Config.LockedCategories[data.category] or nil
+end
+
+exports('GetLockedLot', getLockedLot)
+
+local function canUseLot(Player, lot)
+    return not lot.job or Player.PlayerData.job.name == lot.job
+end
+
+local function lockedMessage(lockedLot)
+    local target = JGRPGarage.GetLot(lockedLot)
+
+    return ('That vehicle can only be kept at %s'):format(target and target.label or lockedLot)
 end
 
 -- ---------------------------------------------------------------------------
@@ -187,6 +205,8 @@ lib.callback.register('jgrp-garage:server:getVehicles', function(source, lotId)
     local coords = GetEntityCoords(GetPlayerPed(source))
     if not JGRPGarage.IsInsideLot(lot, coords, Config.RetrieveTolerance) then return {} end
 
+    if not canUseLot(Player, lot) then return {} end
+
     if lot.impound then
         return impoundedVehicles(Player.PlayerData.citizenid)
     end
@@ -213,6 +233,8 @@ lib.callback.register('jgrp-garage:server:park', function(source, data)
 
     -- The pound is somewhere cars are put, not somewhere you put them.
     if lot.impound then return false, 'You cannot leave a car at the impound' end
+
+    if not canUseLot(Player, lot) then return false, 'You cannot park here' end
 
     local spotIndex = tonumber(data.spotIndex)
     if not spotIndex or not lot.spots[spotIndex] then return false, 'Not in a parking spot' end
@@ -250,6 +272,9 @@ lib.callback.register('jgrp-garage:server:park', function(source, data)
         return false, 'This lot does not take that kind of vehicle'
     end
 
+    local lockedLot = getLockedLot(row.vehicle)
+    if lockedLot and lockedLot ~= lot.id then return false, lockedMessage(lockedLot) end
+
     MySQL.update.await([[
         UPDATE player_vehicles
         SET state = 1, garage = ?, parkingspot = ?, fuel = ?, engine = ?, body = ?, mods = ?, depotprice = 0
@@ -285,6 +310,8 @@ lib.callback.register('jgrp-garage:server:retrieve', function(source, lotId, pla
     if not JGRPGarage.IsInsideLot(lot, coords, Config.RetrieveTolerance) then
         return false, 'You are not in this parking lot'
     end
+
+    if not canUseLot(Player, lot) then return false, 'You cannot use this lot' end
 
     local row, fee
 
