@@ -126,6 +126,14 @@ Config.VehicleClasses = {
     emergency = { 18, 19 }
 }
 
+-- Commercial vans that GTA files under class 20 (commercial) but that players
+-- expect to park like any other van. They are checked as class 12 (vans), so
+-- the `car` lots take them; semis, dumpers and other class 20 trucks stay out.
+Config.ParkAsVan = {
+    'mule', 'mule2', 'mule3', 'mule4', 'mule5',
+    'benson', 'benson2'
+}
+
 -- ---------------------------------------------------------------------------
 -- Parking lots
 -- ---------------------------------------------------------------------------

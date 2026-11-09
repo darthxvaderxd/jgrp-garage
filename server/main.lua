@@ -168,7 +168,12 @@ local classOfCategory = {
     commercial = 20, trains = 21, openwheel = 22, police = 18
 }
 
+local parkAsVan = {}
+for _, name in ipairs(Config.ParkAsVan or {}) do parkAsVan[name] = true end
+
 local function getVehicleClass(model)
+    if parkAsVan[model] then return 12 end
+
     local data = QBCore.Shared.Vehicles[model]
 
     return data and classOfCategory[data.category] or nil

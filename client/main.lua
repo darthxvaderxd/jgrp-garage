@@ -134,6 +134,9 @@ end
 -- Parking
 -- ---------------------------------------------------------------------------
 
+local parkAsVan = {}
+for _, name in ipairs(Config.ParkAsVan or {}) do parkAsVan[joaat(name)] = true end
+
 AddEventHandler('jgrp-garage:client:park', function()
     if busy then return end
 
@@ -154,7 +157,10 @@ AddEventHandler('jgrp-garage:client:park', function()
         return notify('You have to be driving the vehicle to park it.', 'error')
     end
 
-    if not JGRPGarage.IsClassAllowed(lot, GetVehicleClass(vehicle)) then
+    local class = GetVehicleClass(vehicle)
+    if parkAsVan[GetEntityModel(vehicle)] then class = 12 end
+
+    if not JGRPGarage.IsClassAllowed(lot, class) then
         return notify('This lot does not take that kind of vehicle.', 'error')
     end
 
